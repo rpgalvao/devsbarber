@@ -180,108 +180,177 @@ class BarberController extends Controller
         return $array;
     }
 
-
-    /*
-     *
-     * MÉTODO PARA CRIAÇÃO DE BARBEIROS ALEATÓRIOS PARA TESTE
-     *
-    public function createRandom()
+    public function setAppointment($id, Request $request)
     {
         $array = ['error' => ''];
-        for ($q = 0; $q < 15; $q++) {
-            $names = [
-                'Bonieky',
-                'Paulo',
-                'Pedro',
-                'Amanda',
-                'Leticia',
-                'Gabriel',
-                'Gabriela',
-                'Thais',
-                'Luiz',
-                'Diogo',
-                'José',
-                'Jeremias',
-                'Francisco',
-                'Dirce',
-                'Marcelo',
-                'Tiago'
-            ];
-            $lastnames = [
-                'Santos',
-                'Silva',
-                'Santos',
-                'Silva',
-                'Alvaro',
-                'Sousa',
-                'Diniz',
-                'Josefa',
-                'Luiz',
-                'Diogo',
-                'Limoeiro',
-                'Santos',
-                'Limiro',
-                'Galvão',
-                'Nazare',
-                'Mimoza'
-            ];
-            $servicos = ['Corte', 'Pintura', 'Aparação', 'Enfeite'];
-            $servicos2 = ['Cabelo', 'Unha', 'Pernas', 'Sobrancelhas'];
-            $depos = [
-                'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
-                'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
-                'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
-                'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
-                'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.'
-            ];
-            $newBarber = new Barber();
-            $newBarber->name = $names[rand(0, count($names) - 1)] . ' ' . $lastnames[rand(0, count($lastnames) - 1)];
-            $newBarber->avatar = rand(1, 4) . '.png';
-            $newBarber->stars = rand(2, 4) . '.' . rand(0, 9);
-            $newBarber->latitude = '-23.5' . rand(0, 9) . '30907';
-            $newBarber->longitude = '-46.6' . rand(0, 9) . '82759';
-            $newBarber->save();
-            $ns = rand(3, 6);
-            for ($w = 0; $w < 4; $w++) {
-                $newBarberPhoto = new BarberPhoto();
-                $newBarberPhoto->id_barber = $newBarber->id;
-                $newBarberPhoto->url = rand(1, 5) . '.png';
-                $newBarberPhoto->save();
-            }
-            for ($w = 0; $w < $ns; $w++) {
-                $newBarberService = new BarberService();
-                $newBarberService->id_barber = $newBarber->id;
-                $newBarberService->name = $servicos[rand(0, count($servicos) - 1)] . ' de ' . $servicos2[rand(0,
-                        count($servicos2) - 1)];
-                $newBarberService->price = rand(1, 99) . '.' . rand(0, 100);
-                $newBarberService->save();
-            }
-            for ($w = 0; $w < 3; $w++) {
-                $newBarberTestimonial = new BarberTestimonial();
-                $newBarberTestimonial->id_barber = $newBarber->id;
-                $newBarberTestimonial->name = $names[rand(0, count($names) - 1)];
-                $newBarberTestimonial->rate = rand(2, 4) . '.' . rand(0, 9);
-                $newBarberTestimonial->body = $depos[rand(0, count($depos) - 1)];
-                $newBarberTestimonial->save();
-            }
-            for ($e = 0; $e < 4; $e++) {
-                $rAdd = rand(7, 10);
-                $hours = [];
-                for ($r = 0; $r < 8; $r++) {
-                    $time = $r + $rAdd;
-                    if ($time < 10) {
-                        $time = '0' . $time;
+
+        $service = $request->input('service');
+        $year = intval($request->input('year'));
+        $month = intval($request->input('month'));
+        $day = intval($request->input('day'));
+        $hour = intval($request->input('hour'));
+
+        $month = ($month < 10) ? '0' . $month : $month;
+        $day = ($day < 10) ? '0' . $day : $day;
+        $hour = ($hour < 10) ? '0' . $hour : $hour;
+
+//        1. Verificar se o serviço do barbeiro existe
+        $barberService = BarberService::select()
+            ->where('id', $service)
+            ->where('id_barber', $id)
+            ->first();
+
+        if ($barberService) {
+//        2. Verificar se a data é real
+            $apDate = $year.'-'.$month.'-'.$day.' '.$hour.':00:00';
+
+            if(strtotime($apDate) > 0){
+    //        3. Verificar se o barbeiro já possui agendamento nesse dia/hora
+                $apps = UserAppointment::select()
+                    ->where('id_barber', $id)
+                    ->where('ap_datetime', $apDate)
+                    ->count();
+
+                if($apps == 0){
+        //        4.1 Verificar se o barbeiro atende nesse dia da semana
+                    $weekday = date('w', strtotime($apDate));
+
+                    $avail = BarberAvailability::select()
+                        ->where('id_barber', $id)
+                        ->where('weekday', $weekday)
+                        ->first();
+
+                    if($avail) {
+//                    4.2 Verificar se o barbeiro atende nesta hora
+                        $hours = explode(',', $avail['hours']);
+                        if(in_array($hour.':00', $hours)){
+//                        5. Fazer o agendamento
+                            $newApp = new UserAppointment();
+                            $newApp->id_user = $this->loggedUser->id;
+                            $newApp->id_barber = $id;
+                            $newApp->id_service = $service;
+                            $newApp->ap_datetime = $apDate;
+                            $newApp->save();
+                        } else {
+                            $array['error'] = 'Profissional não atende nessa hora, ou já foi agendada!';
+                        }
+                    } else {
+                        $array['error'] = 'Profissional não atende nesse dia!';
                     }
-                    $hours[] = $time . ':00';
+                } else {
+                    $array['error'] = 'Profissional indisponível para essa data!';
                 }
-                $newBarberAvail = new BarberAvailability();
-                $newBarberAvail->id_barber = $newBarber->id;
-                $newBarberAvail->weekday = $e;
-                $newBarberAvail->hours = implode(',', $hours);
-                $newBarberAvail->save();
+            } else {
+                $array['error'] = 'Data inválida!';
             }
+        } else {
+            $array['error'] = 'Serviço inexistente!';
         }
+
         return $array;
     }
+
+
+    /*
+     * CRIAÇÃO DE BARBEIROS ALEATÓRIOS
+     *
+        public function createRandom()
+        {
+            $array = ['error' => ''];
+            for ($q = 0; $q < 15; $q++) {
+                $names = [
+                    'Bonieky',
+                    'Paulo',
+                    'Pedro',
+                    'Amanda',
+                    'Leticia',
+                    'Gabriel',
+                    'Gabriela',
+                    'Thais',
+                    'Luiz',
+                    'Diogo',
+                    'José',
+                    'Jeremias',
+                    'Francisco',
+                    'Dirce',
+                    'Marcelo',
+                    'Tiago'
+                ];
+                $lastnames = [
+                    'Santos',
+                    'Silva',
+                    'Santos',
+                    'Silva',
+                    'Alvaro',
+                    'Sousa',
+                    'Diniz',
+                    'Josefa',
+                    'Luiz',
+                    'Diogo',
+                    'Limoeiro',
+                    'Santos',
+                    'Limiro',
+                    'Galvão',
+                    'Nazare',
+                    'Mimoza'
+                ];
+                $servicos = ['Corte', 'Pintura', 'Aparação', 'Enfeite'];
+                $servicos2 = ['Cabelo', 'Unha', 'Pernas', 'Sobrancelhas'];
+                $depos = [
+                    'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
+                    'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
+                    'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
+                    'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.',
+                    'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptate consequatur tenetur facere voluptatibus iusto accusantium vero sunt, itaque nisi esse ad temporibus a rerum aperiam cum quaerat quae quasi unde.'
+                ];
+                $newBarber = new Barber();
+                $newBarber->name = $names[rand(0, count($names) - 1)] . ' ' . $lastnames[rand(0, count($lastnames) - 1)];
+                $newBarber->avatar = rand(1, 4) . '.png';
+                $newBarber->stars = rand(2, 4) . '.' . rand(0, 9);
+                $newBarber->latitude = '-23.5' . rand(0, 9) . '30907';
+                $newBarber->longitude = '-46.6' . rand(0, 9) . '82759';
+                $newBarber->save();
+                $ns = rand(3, 6);
+                for ($w = 0; $w < 4; $w++) {
+                    $newBarberPhoto = new BarberPhoto();
+                    $newBarberPhoto->id_barber = $newBarber->id;
+                    $newBarberPhoto->url = rand(1, 5) . '.png';
+                    $newBarberPhoto->save();
+                }
+                for ($w = 0; $w < $ns; $w++) {
+                    $newBarberService = new BarberService();
+                    $newBarberService->id_barber = $newBarber->id;
+                    $newBarberService->name = $servicos[rand(0, count($servicos) - 1)] . ' de ' . $servicos2[rand(0,
+                            count($servicos2) - 1)];
+                    $newBarberService->price = rand(1, 99) . '.' . rand(0, 100);
+                    $newBarberService->save();
+                }
+                for ($w = 0; $w < 3; $w++) {
+                    $newBarberTestimonial = new BarberTestimonial();
+                    $newBarberTestimonial->id_barber = $newBarber->id;
+                    $newBarberTestimonial->name = $names[rand(0, count($names) - 1)];
+                    $newBarberTestimonial->rate = rand(2, 4) . '.' . rand(0, 9);
+                    $newBarberTestimonial->body = $depos[rand(0, count($depos) - 1)];
+                    $newBarberTestimonial->save();
+                }
+                for ($e = 0; $e < 4; $e++) {
+                    $rAdd = rand(7, 10);
+                    $hours = [];
+                    for ($r = 0; $r < 8; $r++) {
+                        $time = $r + $rAdd;
+                        if ($time < 10) {
+                            $time = '0' . $time;
+                        }
+                        $hours[] = $time . ':00';
+                    }
+                    $newBarberAvail = new BarberAvailability();
+                    $newBarberAvail->id_barber = $newBarber->id;
+                    $newBarberAvail->weekday = $e;
+                    $newBarberAvail->hours = implode(',', $hours);
+                    $newBarberAvail->save();
+                }
+            }
+            return $array;
+        }
     */
 }
