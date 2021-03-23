@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Barber;
+use App\Models\BarberService;
+use App\Models\UserAppointment;
 use App\Models\UserFavorite;
 use Illuminate\Http\Request;
 
@@ -71,8 +73,37 @@ class UserController extends Controller
         if ($favs) {
             foreach ($favs as $fav) {
                 $barber = Barber::find($fav['id_barber']);
-                $barber['avatar'] = url('media/avatars/'.$barber['avatar']);
+                $barber['avatar'] = url('media/avatars/' . $barber['avatar']);
                 $array['list'][] = $barber;
+            }
+        }
+
+        return $array;
+    }
+
+    public function getAppointment()
+    {
+        $array = ['error' => '', 'list' => []];
+
+        $apps = UserAppointment::select()
+            ->where('id_user', $this->loggedUser->id)
+            ->orderBy('ap_datetime', 'DESC')
+            ->get();
+
+        if($apps){
+            foreach ($apps as $app) {
+
+                $barber = Barber::find($app['id_barber']);
+                $barber['avatar'] = url('media/avatars/'.$barber['avatar']);
+
+                $service = BarberService::find($app['id_service']);
+
+                $array['list'][] = [
+                    'id' => $app['id'],
+                    'datetime' => $app['ap_datetime'],
+                    'barber' => $barber,
+                    'service' => $service
+                ];
             }
         }
 
